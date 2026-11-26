@@ -1,0 +1,4 @@
+Pillow>=10.0
+playwright>=1.40
+pypdfium2>=4.30
+openpyxl>=3.1
