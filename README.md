@@ -76,18 +76,18 @@ AIは3つから選べます。`@claude`（Claude）、`@chatgpt`（ChatGPT）、
 
 ### AIは何を読み込んで動くのか
 
-Claude は `CLAUDE.md` を、ChatGPT と Gemini は `AGENTS.md` を読みます。`AGENTS.md` には「`CLAUDE.md` の決まりに従う」ことと、仕組みの違いによる読み替え（呼び名、保存のしかたなど）だけを書いているので、ルールを直すときは `CLAUDE.md` と手順書（`.claude/skills/`）だけを直せば、3つのAIすべてに反映されます。
+Claude は `CLAUDE.md` を、ChatGPT と Gemini は `AGENTS.md` を読みます。`AGENTS.md` には「`CLAUDE.md` の決まりに従う」ことと、仕組みの違いによる読み替え（呼び名、保存のしかたなど）だけを書いているので、ルールを直すときは `CLAUDE.md` と手順書（`claude/skills/`）だけを直せば、3つのAIすべてに反映されます。
 
 | ファイル | 内容 |
 | --- | --- |
 | `CLAUDE.md` | 全体のルール（話し方、進め方、触ってよいファイル、守ること） |
-| `.claude/skills/news/SKILL.md` | ニュースの作り方（記事ごとに必要な情報を洗い出す → 完成案 → 保存） |
-| `.claude/skills/recruit/SKILL.md` | 採用情報（募集一覧、仕事、社員紹介、よくある質問、新しい職種）の変え方 |
-| `.claude/skills/edit/SKILL.md` | 文章の修正、画像の差し替え、取り下げ、「確認中」の表示の消し方 |
-| `.claude/skills/photo/SKILL.md` | 写真の選び方と加工（ぼかし・切り抜き・トーン）。写っている人の顔や文字の確かめ方 |
-| `.claude/skills/illustration/SKILL.md` | 写真がないときのイラストの描き方 |
-| `.claude/skills/design/SKILL.md` | デザイン（色・文字・余白など）の変え方 |
-| `.claude/skills/restore/SKILL.md` | 前の状態に戻すやり方 |
+| `claude/skills/news/SKILL.md` | ニュースの作り方（記事ごとに必要な情報を洗い出す → 完成案 → 保存） |
+| `claude/skills/recruit/SKILL.md` | 採用情報（募集一覧、仕事、社員紹介、よくある質問、新しい職種）の変え方 |
+| `claude/skills/edit/SKILL.md` | 文章の修正、画像の差し替え、取り下げ、「確認中」の表示の消し方 |
+| `claude/skills/photo/SKILL.md` | 写真の選び方と加工（ぼかし・切り抜き・トーン）。写っている人の顔や文字の確かめ方 |
+| `claude/skills/illustration/SKILL.md` | 写真がないときのイラストの描き方 |
+| `claude/skills/design/SKILL.md` | デザイン（色・文字・余白など）の変え方 |
+| `claude/skills/restore/SKILL.md` | 前の状態に戻すやり方 |
 
 ---
 
@@ -196,7 +196,7 @@ Claude は `CLAUDE.md` を、ChatGPT と Gemini は `AGENTS.md` を読みます�
 ├── tools/                 チェックと公開用のファイルづくり、画像の調整、画面の撮影
 ├── CLAUDE.md              AIへの作業ルール（Claude が読む。ChatGPT・Gemini も AGENTS.md から読む）
 ├── AGENTS.md              ChatGPT・Gemini 向けの読み替え
-├── .claude/skills/        AIの作業手順（3つのAIで共通）
+├── claude/skills/        AIの作業手順（3つのAIで共通）
 └── .github/               自動処理の設定
 ```
 
