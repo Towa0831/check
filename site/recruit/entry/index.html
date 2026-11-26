@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>エントリー｜ウッドプラスチックテクノロジーポータル</title>
+<meta name="description" content="採用へのエントリーフォーム。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../assets/style.css?v=20261029">
+</head>
+<body class="is-recruit">
+<header class="site-header">
+  <div class="hd-inner">
+    <p class="brand"><a href="../../">
+      <span class="brand-cap">アライアンス5社をつなぐポータルサイト</span>
+      <span class="brand-row"><svg class="badge" viewBox="0 0 64 40" aria-hidden="true"><ellipse cx="32" cy="20" rx="31" ry="19" fill="var(--green)"/><ellipse cx="32" cy="20" rx="27" ry="15.5" fill="none" stroke="#fff" stroke-width="1.6"/><text x="32" y="26.5" text-anchor="middle" font-size="17" font-weight="800" font-family="Inter,Arial,sans-serif" fill="#fff" font-style="italic">WPT</text></svg><span class="brand-name">ウッドプラスチックテクノロジー</span><span class="brand-sep"></span><span class="brand-portal">PORTAL</span></span>
+    </a></p>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="gnav"><span></span><span class="sr">メニュー</span></button>
+    <div class="hd-nav" id="gnav">
+      <nav aria-label="メインメニュー"><ul class="gnav"><li><a href="../../alliance/">アライアンス</a></li><li><a href="../../news/">ニュース</a></li><li><a href="../../contact/">お問い合わせ</a></li></ul></nav>
+      <div class="hd-cta has-drop is-current">
+        <a href="../../recruit/" aria-haspopup="true">採用情報</a>
+        <ul class="drop"><li><a href="../../recruit/jobs/">仕事を知る</a></li><li><a href="../../recruit/people/">人を知る</a></li><li><a href="../../recruit/open/">オープン採用</a></li><li><a href="../../recruit/faq/">よくある質問</a></li><li><a href="../../recruit/career/">募集一覧</a></li><li><a href="../../recruit/entry/" aria-current="page">エントリー</a></li></ul>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="site-main">
+<section class="page-head"><div class="container"><p class="en">ENTRY</p><h1>エントリー</h1><p class="ph-lead">履歴書は要りません。まずはご連絡ください。担当者へ直接届きます。</p></div></section>
+
+<section class="sec narrow">
+    <div class="container">
+      <iframe id="mailform" src="/script/mailform/wpt-recruit/"
+          title="お問い合わせフォーム"
+          style="width:100%; border:0;"></iframe>
+
+      <script>
+        const frame = document.getElementById('mailform');
+        let first = true;
+
+        // iframeの高さを中身に合わせる
+        function fitHeight() {
+          const doc = frame.contentDocument;
+          if (!doc || !doc.documentElement) return;
+          frame.style.height = '0px'; // 一度縮めてから測ると、短い画面でも縮む
+          frame.style.height = doc.documentElement.scrollHeight + 'px';
+        }
+
+        frame.addEventListener('load', () => {
+
+          fitHeight();
+
+          // 確認画面に切り替わったらフォームの先頭までスクロール
+          if (!first) frame.scrollIntoView({ behavior: 'smooth' });
+          first = false;
+        });
+
+        // 画面幅が変わると折り返しが変わって高さも変わるので測り直す
+        let lastWidth = window.innerWidth;
+        window.addEventListener('resize', () => {
+          if (window.innerWidth === lastWidth) return; // スマホのスクロールでの縦変化は無視
+          lastWidth = window.innerWidth;
+          fitHeight();
+        });
+      </script>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="marquee marquee--footer" aria-hidden="true"><div class="marquee-track"><span>WOOD PLASTIC TECHNOLOGY</span><span>WOOD PLASTIC TECHNOLOGY</span></div></div>
+  <div class="container ft-inner">
+    <div class="brand"><a href="../../">
+      <span class="brand-cap">アライアンス5社をつなぐポータルサイト</span>
+      <span class="brand-row"><svg class="badge" viewBox="0 0 64 40" aria-hidden="true"><ellipse cx="32" cy="20" rx="31" ry="19" fill="var(--green)"/><ellipse cx="32" cy="20" rx="27" ry="15.5" fill="none" stroke="#fff" stroke-width="1.6"/><text x="32" y="26.5" text-anchor="middle" font-size="17" font-weight="800" font-family="Inter,Arial,sans-serif" fill="#fff" font-style="italic">WPT</text></svg><span class="brand-name">ウッドプラスチックテクノロジー</span><span class="brand-sep"></span><span class="brand-portal">PORTAL</span></span>
+    </a></div>
+    <ul class="ft-links"><li><a href="../../">ホーム</a></li><li><a href="../../alliance/">アライアンス</a></li><li><a href="../../news/">ニュース</a></li><li><a href="../../contact/">お問い合わせ</a></li></ul>
+    <ul class="ft-links"><li><a href="../../recruit/">採用トップ</a></li><li><a href="../../recruit/jobs/">仕事を知る</a></li><li><a href="../../recruit/people/">人を知る</a></li><li><a href="../../recruit/open/">オープン採用</a></li><li><a href="../../recruit/faq/">よくある質問</a></li><li><a href="../../recruit/career/">募集一覧</a></li><li><a href="../../recruit/entry/">エントリー</a></li></ul>
+    <div class="ft-bottom">
+      <p class="ft-rel"><span>関連サイト</span><!-- site.json の related（公開するときに書き込む） --></p>
+      <p class="ft-copy">&copy; Wood Plastic Technology Co., Ltd.</p>
+    </div>
+  </div>
+</footer>
+<script>
+  /* ==========================================================================
+     募集一覧などの「応募する」から来たときは、URLの title・job・site を
+     エントリーフォーム（Xserverのメールフォーム）に入れておく。
+     この部分は JSON を読まない
+     ========================================================================== */
+  (() => {
+    const params = new URLSearchParams(location.search);
+
+    // Xserverのメールフォーム（iframe）に、URLの title・job・site の値を入れる
+    const fill = {
+      title: 'input[type="text"][name="item_stext01"]', // 応募する求人
+      job:   'select[name="item_sselect01"]',           // ご希望の職種
+      site:  'input[type="text"][name="item_stext02"]'  // ご希望の勤務地
+    };
+    const mailFrame = document.getElementById('mailform');
+    const hasParams = Object.keys(fill).some(k => params.get(k));
+
+    if (hasParams && mailFrame) {
+      let done = false;
+      const setValues = () => {
+        if (done) return;
+        try {
+          const doc = mailFrame.contentDocument;
+          // 入力画面でなければ（読み込み前・確認画面・完了画面）何もしない
+          if (!doc.querySelector(Object.values(fill).join(','))) return;
+
+          Object.keys(fill).forEach(k => {
+            const value = params.get(k);
+            const field = doc.querySelector(fill[k]);
+            if (value && field && !field.value) field.value = value; // 空欄のときだけ入れる
+          });
+          done = true; // 最初の1回だけ
+        } catch (e) {}
+      };
+      mailFrame.addEventListener('load', setValues);
+      setValues(); // スクリプト実行時点ですでにフォームが読み込まれていた場合
+    }
+  })();
+</script>
+<script src="../../assets/app.js?v=20261028" defer></script>
+</body>
+</html>
