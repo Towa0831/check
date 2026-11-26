@@ -1,1 +1,283 @@
+name: ChatGPT・Gemini（Issueからの更新）
 
+# Issueやコメントに「@chatgpt」か「@gemini」と書かれたときに、そのAIが動きます。
+# 流れ・ルール・道具は Claude（claude.yml）と同じです。ルールは AGENTS.md（その中で CLAUDE.md を読む）。
+#  - 新しいIssueの本文やタイトルに @chatgpt / @gemini があるとき
+#  - Issueや公開申請のコメントに @chatgpt / @gemini があるとき
+# 自動処理（Bot）のコメントには反応しません。書き込みの権限がない人の依頼にも反応しません。
+# 1つのコメントで2つ以上のAIを呼んだときは、どれも動かず、そのことを知らせます。
+#
+# 安全のため、3つに分けて動かします（前後の処理は .github/scripts/ai_run.py）。
+#  1. start  … 呼ばれたAIと頼んだ人の権限を確かめ、「作業を始めました」とコメントする
+#  2. work   … AI が作業する。保存の権限（GitHub の書き込みの鍵）は持たせない。変更は「変更のまとめ」にして次へ渡す
+#  3. finish … まっさらな環境で、変更のまとめのうち site/ の中だけを取り込み、チェックして下書きに保存し、
+#              確認用ページ（preview.yml）を頼み、「作業を始めました」のコメントを返事に置き換える
+#
+# 準備（管理者）: リポジトリの Settings → Secrets and variables → Actions → Secrets に
+#   OPENAI_API_KEY（ChatGPT 用）と GEMINI_API_KEY（Gemini 用）を登録する。
+#   使うモデルを変えたいときは、同じ画面の Variables に OPENAI_MODEL・GEMINI_MODEL を登録する（なければ標準のモデル）。
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+# 同じIssueへの依頼は、前の作業が終わってから順番に処理する
+concurrency:
+  group: ai-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Tokyo
+
+jobs:
+  start:
+    if: |
+      (github.event_name == 'issues' &&
+        (contains(github.event.issue.body, '@chatgpt') || contains(github.event.issue.title, '@chatgpt') ||
+         contains(github.event.issue.body, '@gemini') || contains(github.event.issue.title, '@gemini'))) ||
+      (github.event_name == 'issue_comment' &&
+        github.event.comment.user.type != 'Bot' &&
+        (contains(github.event.comment.body, '@chatgpt') || contains(github.event.comment.body, '@gemini')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.start.outputs.skip }}
+      ai: ${{ steps.start.outputs.ai }}
+      label: ${{ steps.start.outputs.label }}
+      number: ${{ steps.start.outputs.number }}
+      is_pr: ${{ steps.start.outputs.is_pr }}
+      branch: ${{ steps.start.outputs.branch }}
+      comment_id: ${{ steps.start.outputs.comment_id }}
+      started: ${{ steps.start.outputs.started }}
+    steps:
+      - name: 仕組みのファイルを取り出す
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: 呼ばれたAIと、頼んだ人の権限を確かめ、作業中のコメントを出す
+        id: start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/ai_run.py start
+
+  work:
+    needs: start
+    if: needs.start.outputs.skip == 'false'
+    # ChatGPT の公式の部品（openai/codex-action）は、2026年10月から順に切り替わった新しい機械（Ubuntu 26.04）では
+    # 安全のための準備（drop-sudo）で止まる（openai/codex-action#188）。直るまで、前の版の機械で動かす
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # 読むだけの権限。AI が作業する環境には、保存（書き込み）の鍵を置かない
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      start_sha: ${{ steps.prepare.outputs.start_sha }}
+      outcome: ${{ needs.start.outputs.ai == 'chatgpt' && steps.chatgpt.outcome || steps.gemini.outcome }}
+    env:
+      AI: ${{ needs.start.outputs.ai }}
+      LABEL: ${{ needs.start.outputs.label }}
+      NUMBER: ${{ needs.start.outputs.number }}
+      IS_PR: ${{ needs.start.outputs.is_pr }}
+      BRANCH: ${{ needs.start.outputs.branch }}
+      COMMENT_ID: ${{ needs.start.outputs.comment_id }}
+      # 新しい Gemini CLI は、作業する場所を「信頼済み」と明示しないと、自動処理では動かない（Gemini の部品の中まで届くよう、ここで設定する）
+      GEMINI_CLI_TRUST_WORKSPACE: "true"
+    steps:
+      - name: リポジトリのファイルを取り出す（履歴とすべての下書きも含む）
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # 資料置き場（inbox/）は、AI が作業する場所からは見えないようにする。
+      # 読めるのは、Issueで名前が書かれた資料だけ（次の手順で /tmp/issue-files にコピーする）。
+      # 記録（git）からは消さないので、下書きに「消した」とは記録されない
+      - name: 資料置き場を、作業する場所から見えないようにする
+        run: git sparse-checkout set --no-cone '/*' '!/inbox/'
+
+      # 公開申請の下書きは、この仕組みより前に作られたものもあるので、使うスクリプトは /tmp/ai に写してから切り替える
+      - name: 作業する下書きに切り替える
+        id: prepare
+        run: python3 .github/scripts/ai_run.py prepare
+
+      - name: Pythonを準備する
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: サイト生成・画像処理に必要な部品をインストールする
+        run: pip install -r requirements.txt playwright
+
+      # 画面の撮影・確認用ページづくりに使うブラウザ。AI が作業する囲いの中では、機械に入っている Chrome が
+      # 起動できないことがあるため、playwright の小さなブラウザも入れておく（tools/ は Chrome が使えないとこちらを使う）
+      - name: 画面の撮影に使うブラウザをインストールする
+        run: python -m playwright install --only-shell chromium
+
+      - name: Issueに貼られた画像と、添付・指定された資料をダウンロードする
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ needs.start.outputs.number }}
+        run: python /tmp/ai/fetch_issue_images.py
+
+      - name: AIに渡す依頼文を作る
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python /tmp/ai/ai_run.py prompt
+
+      # ---------------- ChatGPT ----------------
+      # 作業できる範囲: リポジトリの中と /tmp に書き込める。ネットは、手元の確認用サーバーと github.com（下書きの取り込み）だけ。
+      - name: ChatGPT の作業範囲を設定する
+        if: env.AI == 'chatgpt'
+        run: |
+          mkdir -p ~/.codex
+          cat > ~/.codex/config.toml <<'EOF'
+          default_permissions = "site"
+
+          [features]
+          network_proxy = true
+
+          [permissions.site]
+          extends = ":workspace"
+
+          [permissions.site.filesystem.":workspace_roots"]
+          "." = "write"
+          ".git" = "write"
+
+          [permissions.site.network]
+          enabled = true
+
+          [permissions.site.network.domains]
+          "localhost" = "allow"
+          "127.0.0.1" = "allow"
+          "github.com" = "allow"
+          EOF
+
+      - name: ChatGPT が作業する
+        id: chatgpt
+        if: env.AI == 'chatgpt'
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: /tmp/ai/prompt.md
+          output-file: /tmp/ai/reply.md
+          permission-profile: site
+          model: ${{ vars.OPENAI_MODEL }}
+
+      # ---------------- Gemini ----------------
+      # 使える道具は Claude と同じものだけ（tools.core）。ルールは AGENTS.md を読む（context.fileName）。
+      - name: Gemini が作業する
+        id: gemini
+        if: env.AI == 'gemini'
+        uses: google-github-actions/run-gemini-cli@v0
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_model: ${{ vars.GEMINI_MODEL }}
+          prompt: "最初に /tmp/ai/prompt.md を read_file で全部読み、その指示に従って作業してください。"
+          settings: |-
+            {
+              "context": {
+                "fileName": ["AGENTS.md"],
+                "includeDirectories": ["/tmp/ai", "/tmp/issue-images", "/tmp/github-images", "/tmp/issue-files"]
+              },
+              "tools": {
+                "core": [
+                  "read_file", "read_many_files", "write_file", "replace", "list_directory", "glob", "grep_search",
+                  "run_shell_command(python tools/build.py)",
+                  "run_shell_command(python tools/prepare_image.py)",
+                  "run_shell_command(python tools/photo_sheet.py)",
+                  "run_shell_command(python tools/screenshot.py)",
+                  "run_shell_command(python tools/render_svg.py)",
+                  "run_shell_command(python tools/remove.py)",
+                  "run_shell_command(python tools/history.py)",
+                  "run_shell_command(python tools/read_doc.py)",
+                  "run_shell_command(cp)", "run_shell_command(mkdir)", "run_shell_command(ls)",
+                  "run_shell_command(git log)", "run_shell_command(git show)", "run_shell_command(git diff)",
+                  "run_shell_command(git restore)", "run_shell_command(git tag)", "run_shell_command(git fetch)"
+                ]
+              }
+            }
+
+      - name: Gemini の返事を受け取る
+        if: env.AI == 'gemini' && !cancelled()
+        env:
+          SUMMARY: ${{ steps.gemini.outputs.summary }}
+        run: printf '%s' "$SUMMARY" > /tmp/ai/reply.md
+
+      - name: 変更のまとめと返事を作る
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        env:
+          START_SHA: ${{ steps.prepare.outputs.start_sha }}
+        run: python3 /tmp/ai/ai_run.py package
+
+      - name: 変更のまとめと返事を、保存の処理に渡す
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ai-result
+          path: /tmp/ai/out/
+          retention-days: 3
+          if-no-files-found: ignore
+
+  finish:
+    needs: [start, work]
+    if: ${{ always() && needs.start.outputs.skip == 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: read
+      actions: write
+    steps:
+      # 仕組みのファイルは、AI が触れていない、まっさらな状態から使う
+      - name: リポジトリのファイルを取り出す
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pythonを準備する
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: チェックに必要な部品をインストールする
+        run: pip install -r requirements.txt
+
+      - name: 変更のまとめと返事を受け取る
+        if: needs.work.result != 'skipped'
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: ai-result
+          path: /tmp/ai/out/
+
+      - name: site/ の中の変更だけを確かめて保存し、返事をコメントする
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AI: ${{ needs.start.outputs.ai }}
+          LABEL: ${{ needs.start.outputs.label }}
+          NUMBER: ${{ needs.start.outputs.number }}
+          IS_PR: ${{ needs.start.outputs.is_pr }}
+          BRANCH: ${{ needs.start.outputs.branch }}
+          COMMENT_ID: ${{ needs.start.outputs.comment_id }}
+          STARTED: ${{ needs.start.outputs.started }}
+          START_SHA: ${{ needs.work.outputs.start_sha }}
+          WORK_RESULT: ${{ needs.work.result }}
+          OUTCOME: ${{ needs.work.outputs.outcome }}
+          # 保存するファイルに、これらが書き込まれていないかを確かめるためだけに使う
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python3 .github/scripts/ai_run.py finish

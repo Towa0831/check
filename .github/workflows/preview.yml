@@ -1,0 +1,147 @@
+name: 確認用ページを更新
+
+# AIが下書きを保存したら、AIの処理（Claude は claude.yml、ChatGPT・Gemini は ai.yml）から呼び出されます。
+# 下書きの内容で確認用ページを作って GitHub Pages に公開し、
+# そのURLをIssue（公開申請があればそちら）にコメントします。
+# 確認用ページは1つだけです。最後に作った下書きの内容が表示されます。
+# Actions タブの「Run workflow」で、下書き（ブランチ）を選んで手動でも動かせます。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: preview
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
+    steps:
+      - name: リポジトリのファイルを取り出す
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pythonを準備する
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 必要な部品をインストールする
+        run: pip install -r requirements.txt
+
+      - name: 確認用のファイルをそろえる（チェックも行う）
+        id: build
+        run: python tools/build.py --preview
+
+      - name: 確認用ページを準備する
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/
+
+      # GitHub 側で、準備したファイルがすぐには見つからず失敗することがある（"No artifacts named github-pages"）。
+      # 「Re-run」ではやり直せない（同じ名前のファイルが2つになって失敗する）ため、ここで少し待って2回までやり直す。
+      - name: 確認用ページを公開する（GitHub Pages）
+        id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: 少し待つ（やり直し1回目の前）
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+
+      - name: 確認用ページを公開する（やり直し1回目）
+        id: deploy2
+        if: steps.deployment.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: 少し待つ（やり直し2回目の前）
+        if: steps.deploy2.outcome == 'failure'
+        run: sleep 60
+
+      - name: 確認用ページを公開する（やり直し2回目）
+        id: deploy3
+        if: steps.deploy2.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+
+      - name: 確認用ページのURLを知らせる
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          PAGE_URL="${PAGE_URL%/}/"
+
+          # 知らせる先：この下書きの公開申請があればそこ、なければ元のIssue
+          PR="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          ISSUE="$(echo "$BRANCH" | sed -nE 's#^(claude|chatgpt|gemini)/issue-([0-9]+)-.*#\2#p')"
+          TARGET="${PR:-$ISSUE}"
+          if [ -z "$TARGET" ]; then
+            echo "知らせる先が見つからないため、コメントはしません。確認用ページ: $PAGE_URL"
+            exit 0
+          fi
+
+          # 変わったページの一覧（非公開にしたものは、表示されないことを書く）
+          git fetch --quiet origin main
+          PAGES="$(python tools/changed_pages.py origin/main "$PAGE_URL" dist)"
+
+          {
+            echo "### 確認用ページを更新しました"
+            echo ""
+            echo "- トップページ: ${PAGE_URL}"
+            if [ -n "$PAGES" ]; then echo ""; echo "**今回変わったページ**"; echo "$PAGES"; fi
+            echo ""
+            echo "表示が変わっていなければ、ページを再読み込みしてください（反映に1分ほどかかることがあります）。"
+            echo "確認用ページは1つだけなので、ほかの下書きを保存すると、その内容に置き換わります。"
+          } > comment.md
+          gh api "repos/$REPO/issues/$TARGET/comments" -F body=@comment.md > /dev/null
+          echo "#$TARGET に確認用ページのURLを知らせました: $PAGE_URL"
+
+      # 確認用ページを作れなかったときも、URLを待っている人に分かるように知らせる
+      - name: 確認用ページを作れなかったことを知らせる
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          BUILD: ${{ steps.build.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/preview.yml
+        run: |
+          PR="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          ISSUE="$(echo "$BRANCH" | sed -nE 's#^(claude|chatgpt|gemini)/issue-([0-9]+)-.*#\2#p')"
+          TARGET="${PR:-$ISSUE}"
+          if [ -z "$TARGET" ]; then exit 0; fi
+          {
+            echo "### 確認用ページを作れませんでした"
+            echo ""
+            if [ "$BUILD" = "failure" ]; then
+              # 保存した内容に原因があるとき
+              echo "保存した内容で、表示できないページがありました（本番サイトは変わっていません）。"
+              # 下書きを作ったAIの名前で呼んでもらう（公開申請の下書きの名前が claude/… 以外のときも同じ）
+              AI="$(echo "$BRANCH" | sed -nE 's#^(claude|chatgpt|gemini)/.*#\1#p')"
+              echo "\`@${AI:-claude} 確認用ページが作れなかった原因を調べて直して\` とコメントしてください。直らないときは管理者に連絡してください。"
+            else
+              # 保存した内容は問題なく、GitHub 側の一時的な不具合などで公開できなかったとき
+              echo "GitHub 側の一時的な不具合で、確認用ページを更新できませんでした。**保存した内容には問題ありません**（本番サイトは変わっていません）。"
+              echo "時間をおいて、管理者に「確認用ページの作り直し」を頼んでください。"
+              echo ""
+              echo "管理者の方へ：[確認用ページを更新](${WORKFLOW_URL}) を開き、「Run workflow」で下書き \`${BRANCH}\` を選んで実行してください（失敗した処理の「Re-run」ではやり直せません）。"
+            fi
+            echo ""
+            echo "詳しい記録（管理者向け）: ${RUN_URL}"
+          } > comment.md
+          gh api "repos/$REPO/issues/$TARGET/comments" -F body=@comment.md > /dev/null

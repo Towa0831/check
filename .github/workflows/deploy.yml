@@ -1,0 +1,81 @@
+name: 本番サイトに公開
+
+on:
+  # main に反映されたら公開する（＝PRをマージしたとき）
+  push:
+    branches: [ main ]
+    # 資料置き場（inbox/）に資料を入れただけのときは、公開しない（サイトは変わらないため）
+    paths-ignore:
+      - "inbox/**"
+  # 毎朝 6:07（日本時間）に作り直して、公開日が来たお知らせを本番に出す
+  schedule:
+    - cron: "7 21 * * *"
+  # Actions タブから手動でも実行できる
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # サーバーの中のアップロード先は、ファイルには書かず、シークレット FTP_SERVER_DIR に登録する
+      # （別の環境に移しても、ファイルを直さずに済むように）。
+      # 空のまま進むと、FTP のいちばん上の場所にアップロードしてしまうため、ここで止める。
+      - name: アップロード先が登録されているか確かめる
+        env:
+          SERVER_DIR: ${{ secrets.FTP_SERVER_DIR }}
+        run: |
+          if [ -z "$SERVER_DIR" ]; then
+            echo "::error::シークレット FTP_SERVER_DIR（サーバーの中のアップロード先。例: ./example.com/public_html/）が登録されていません。"
+            exit 1
+          fi
+          case "$SERVER_DIR" in
+            */) ;;
+            *) echo "::error::シークレット FTP_SERVER_DIR は「/」で終わる形で登録してください（例: ./example.com/public_html/）。"; exit 1 ;;
+          esac
+
+      - name: リポジトリのファイルを取り出す
+        uses: actions/checkout@v4
+
+      - name: Pythonを準備する
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 必要な部品をインストールする
+        run: pip install -r requirements.txt
+
+      - name: 公開用のファイルをそろえる（チェックも行う）
+        env:
+          # 本番サイトのURL（SNSで共有されたときの画像とURLに使う）。登録がなくても公開できる
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: python tools/build.py
+
+      - name: 本番フォルダにアップロードする
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          timeout: 120000
+          local-dir: ./dist/
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+
+      # 公開した時点の状態に「release-日付-時刻」という目印を付ける。
+      # 差し戻しのときに「○月○日に公開した状態」を探しやすくするため。
+      - name: 公開の記録を残す
+        if: github.event_name == 'push'
+        run: |
+          TAG="release-$(TZ=Asia/Tokyo date +%Y%m%d-%H%M%S)"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "公開の記録: $TAG"
